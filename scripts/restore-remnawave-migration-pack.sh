@@ -9,7 +9,6 @@ ARCHIVE_PATH=""
 PUBLIC_HOST_OVERRIDE=""
 ADMIN_DOMAIN_OVERRIDE=""
 SUBSCRIPTION_DOMAIN_OVERRIDE=""
-MTPROXY_HOST_OVERRIDE=""
 SKIP_START="0"
 
 log() { echo "INFO: $*"; }
@@ -26,7 +25,6 @@ Options:
   --public-host VALUE          Override PUBLIC_HOST for I.R.I.S.
   --admin-domain VALUE         Override Remnawave panel domain
   --subscription-domain VALUE  Override subscription page domain
-  --mtproto-host VALUE         Override MTProto public host
   --skip-start                 Restore files only, do not start services
   --help                       Show this help
 EOF
@@ -104,66 +102,6 @@ for idx, line in enumerate(lines):
         break
 else:
     lines.append(f"{prefix}{value}")
-
-path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
-PY
-}
-
-replace_toml_key() {
-  local file_path="$1"
-  local key="$2"
-  local value="$3"
-  [ -f "$file_path" ] || return 0
-  TOML_FILE_PATH="$file_path" TOML_KEY="$key" TOML_VALUE="$value" python3 - <<'PY'
-import os
-from pathlib import Path
-
-path = Path(os.environ["TOML_FILE_PATH"])
-key = os.environ["TOML_KEY"]
-value = os.environ["TOML_VALUE"]
-
-lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
-prefix = f"{key}"
-done = False
-for idx, line in enumerate(lines):
-    stripped = line.strip()
-    if stripped.startswith(prefix) and "=" in stripped:
-        indent = line[: len(line) - len(line.lstrip(" "))]
-        lines[idx] = f'{indent}{key} = "{value}"'
-        done = True
-        break
-if not done:
-    lines.append(f'{key} = "{value}"')
-path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
-PY
-}
-
-rewrite_mtproxy_url() {
-  local file_path="$1"
-  local new_host="$2"
-  [ -f "$file_path" ] || return 0
-  MTPROXY_ENV_FILE="$file_path" MTPROXY_NEW_HOST="$new_host" python3 - <<'PY'
-import os
-from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-
-path = Path(os.environ["MTPROXY_ENV_FILE"])
-new_host = os.environ["MTPROXY_NEW_HOST"]
-lines = path.read_text(encoding="utf-8").splitlines()
-
-for idx, line in enumerate(lines):
-    if not line.startswith("MTPROXY_URL="):
-        continue
-    value = line.split("=", 1)[1].strip().strip('"').strip("'")
-    try:
-        parts = urlsplit(value)
-        query = dict(parse_qsl(parts.query, keep_blank_values=True))
-        query["server"] = new_host
-        new_value = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
-        lines[idx] = f"MTPROXY_URL={new_value}"
-    except Exception:
-        pass
-    break
 
 path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
 PY
@@ -281,10 +219,6 @@ while [ "$#" -gt 0 ]; do
       SUBSCRIPTION_DOMAIN_OVERRIDE="${2:-}"
       shift 2
       ;;
-    --mtproto-host)
-      MTPROXY_HOST_OVERRIDE="${2:-}"
-      shift 2
-      ;;
     --skip-start)
       SKIP_START="1"
       shift
@@ -329,15 +263,12 @@ MANIFEST_PATH="${WORK_DIR}/inventory/manifest.json"
 OLD_PUBLIC_HOST="$(manifest_read public_host)"
 OLD_ADMIN_DOMAIN="$(manifest_read admin_domain)"
 OLD_SUB_DOMAIN="$(manifest_read sub_domain)"
-OLD_MTPROXY_HOST="$(manifest_read mtproxy_host)"
 IRIS_REPO_REMOTE="$(manifest_read git.remote)"
 IRIS_REPO_COMMIT="$(manifest_read git.commit)"
 
 clone_or_prepare_iris_repo "$IRIS_REPO_REMOTE" "$IRIS_REPO_COMMIT"
 
 restore_tree "remnawave" "/opt/remnawave"
-restore_tree "telemt" "/opt/telemt"
-restore_tree "iris_user" "/opt/iris_user"
 restore_tree "remnanode" "/opt/remnanode"
 restore_tree "rnexus-site" "/opt/rnexus-site"
 
@@ -349,8 +280,6 @@ restore_file "iris-remnawave/state/traffic_cache.json" "/opt/iris-remnawave/stat
 ADMIN_DOMAIN_FINAL="$(normalize_domain "${ADMIN_DOMAIN_OVERRIDE:-$OLD_ADMIN_DOMAIN}")"
 SUB_DOMAIN_FINAL="$(normalize_domain "${SUBSCRIPTION_DOMAIN_OVERRIDE:-$OLD_SUB_DOMAIN}")"
 PUBLIC_HOST_FINAL="${PUBLIC_HOST_OVERRIDE:-$OLD_PUBLIC_HOST}"
-MTPROXY_HOST_FINAL="${MTPROXY_HOST_OVERRIDE:-$OLD_MTPROXY_HOST}"
-[ -n "$MTPROXY_HOST_FINAL" ] || MTPROXY_HOST_FINAL="$PUBLIC_HOST_FINAL"
 
 if [ -n "$ADMIN_DOMAIN_FINAL" ]; then
   upsert_env_key "/opt/remnawave/.env" "FRONT_END_DOMAIN" "$ADMIN_DOMAIN_FINAL"
@@ -365,11 +294,6 @@ fi
 
 if [ -n "$PUBLIC_HOST_FINAL" ]; then
   upsert_env_key "/opt/iris-remnawave/.env" "PUBLIC_HOST" "$PUBLIC_HOST_FINAL"
-fi
-
-if [ -n "$MTPROXY_HOST_FINAL" ]; then
-  replace_toml_key "/opt/telemt/config.toml" "public_host" "$MTPROXY_HOST_FINAL"
-  rewrite_mtproxy_url "/opt/iris_user/.env" "$MTPROXY_HOST_FINAL"
 fi
 
 if [ "$SKIP_START" = "1" ]; then
@@ -416,16 +340,6 @@ elif [ -f /opt/remnawave/nginx/docker-compose.yml ]; then
   (cd /opt/remnawave/nginx && docker compose up -d)
 fi
 
-if [ -f /opt/telemt/docker-compose.yml ]; then
-  log "Starting MTProto"
-  (cd /opt/telemt && docker compose up -d)
-fi
-
-if [ -f /opt/iris_user/docker-compose.yml ]; then
-  log "Starting user bot"
-  (cd /opt/iris_user && docker compose up -d)
-fi
-
 if [ -f /opt/remnanode/docker-compose.yml ]; then
   log "Starting local Remnawave Node"
   (cd /opt/remnanode && docker compose up -d)
@@ -450,9 +364,10 @@ Next checks:
 1. Open the panel domain in a browser.
 2. Open the subscription page.
 3. Confirm Remnawave API answers.
-4. Confirm MTProto accepts connections.
-5. Confirm the user bot still works.
+4. Confirm the local node works on port 2222 if this host carries one.
+5. Confirm client-facing node configs use 2053 if that is your production layout.
 6. Reconnect I.R.I.S. if this host also carries the bot.
+7. If MTProto or user bot live on the same machine, verify them manually. They are out of scope for this toolkit.
 
 Artifacts created during restore:
 - restore staging: ${WORK_DIR}

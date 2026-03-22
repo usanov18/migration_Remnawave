@@ -122,27 +122,6 @@ print(value.split("/", 1)[0].strip())
 PY
 }
 
-telemt_public_host() {
-  local path="$1"
-  [ -f "$path" ] || return 0
-  python3 - "$path" <<'PY'
-import sys
-from pathlib import Path
-
-path = Path(sys.argv[1])
-for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-    line = raw.strip()
-    if line.startswith("public_host") and "=" in line:
-        print(line.split("=", 1)[1].strip().strip('"').strip("'"))
-        break
-PY
-}
-
-telemt_proxy_secret() {
-  local container_name="$1"
-  docker exec "$container_name" sh -lc 'cat /run/telemt/proxy-secret' 2>/dev/null || true
-}
-
 db_container_env_json() {
   local container_name="$1"
   local payload=""
@@ -218,24 +197,15 @@ REMNAWAVE_DIR="$(pick_existing_dir docker-compose.yml /opt/remnawave /srv/remnaw
 NGINX_DIR="$(pick_existing_dir docker-compose.yml /opt/remnawave/nginx /srv/remnawave/nginx || true)"
 CADDY_DIR="$(pick_existing_dir docker-compose.yml /opt/remnawave/caddy /srv/remnawave/caddy || true)"
 SUBSCRIPTION_DIR="$(pick_existing_dir docker-compose.yml /opt/remnawave/subscription /srv/remnawave/subscription || true)"
-TELEMT_DIR="$(pick_existing_dir docker-compose.yml /opt/telemt /srv/telemt || true)"
-USER_BOT_DIR="$(pick_existing_dir docker-compose.yml /opt/iris_user /srv/iris_user || true)"
 REMNANODE_DIR="$(pick_existing_dir docker-compose.yml /opt/remnanode /srv/remnanode || true)"
 
 NGINX_CONTAINER="$(find_service_container remnawave-nginx remnawave-nginx)"
 SITE_DIR="$(container_mount_source "$NGINX_CONTAINER" /var/www/rnexus 2>/dev/null || true)"
 [ -n "$SITE_DIR" ] || SITE_DIR="$(pick_existing_dir "" /opt/rnexus-site /srv/rnexus-site || true)"
 
-USER_BOT_CONTAINER="$(find_service_container vpn_bot vpn_bot)"
-USER_BOT_DATA_DIR="$(container_mount_source "$USER_BOT_CONTAINER" /app/data 2>/dev/null || true)"
-[ -n "$USER_BOT_DATA_DIR" ] || USER_BOT_DATA_DIR="/var/lib/docker/volumes/iris_user_bot_data/_data"
-
-TELEMT_CONTAINER="$(find_service_container telemt telemt)"
-
 IRIS_ENV="${IRIS_DIR}/.env"
 REMNAWAVE_ENV="${REMNAWAVE_DIR}/.env"
 SUB_ENV="${SUBSCRIPTION_DIR}/.env"
-TELEMT_CFG="${TELEMT_DIR}/config.toml"
 
 PUBLIC_HOST="$(read_env_value "$IRIS_ENV" PUBLIC_HOST)"
 ADMIN_DOMAIN="$(host_from_url "$(read_env_value "$IRIS_ENV" REMNAWAVE_URL)")"
@@ -243,8 +213,6 @@ ADMIN_DOMAIN="$(host_from_url "$(read_env_value "$IRIS_ENV" REMNAWAVE_URL)")"
 SUB_DOMAIN="$(host_from_url "$(read_env_value "$IRIS_ENV" REMNAWAVE_SUB_URL)")"
 [ -n "$SUB_DOMAIN" ] || SUB_DOMAIN="$(host_from_url "$(read_env_value "$SUB_ENV" REMNAWAVE_PANEL_URL)")"
 [ -n "$SUB_DOMAIN" ] || SUB_DOMAIN="$(read_env_value "$REMNAWAVE_ENV" SUB_PUBLIC_DOMAIN)"
-MTPROXY_HOST="$(telemt_public_host "$TELEMT_CFG")"
-[ -n "$MTPROXY_HOST" ] || MTPROXY_HOST="$PUBLIC_HOST"
 REPO_REMOTE="$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || true)"
 REPO_COMMIT="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || true)"
 
@@ -261,17 +229,8 @@ copy_file_if_exists "${REMNAWAVE_DIR}/compose.yml" "remnawave/compose.yml" || tr
 copy_tree_if_exists "${NGINX_DIR}" "remnawave/nginx" || true
 copy_tree_if_exists "${CADDY_DIR}" "remnawave/caddy" || true
 copy_tree_if_exists "${SUBSCRIPTION_DIR}" "remnawave/subscription" || true
-copy_tree_if_exists "${TELEMT_DIR}" "telemt" || true
-copy_file_if_exists "${USER_BOT_DIR}/docker-compose.yml" "iris_user/docker-compose.yml" || true
-copy_file_if_exists "${USER_BOT_DIR}/.env" "iris_user/.env" || true
-copy_file_if_exists "${USER_BOT_DATA_DIR}/bot.db" "iris_user/data/bot.db" || true
 copy_tree_if_exists "${REMNANODE_DIR}" "remnanode" || true
 copy_tree_if_exists "${SITE_DIR}" "rnexus-site" || true
-
-PROXY_SECRET="$(telemt_proxy_secret "$TELEMT_CONTAINER" || true)"
-if [ -n "$PROXY_SECRET" ] && [ "$PROXY_SECRET" != "NO_PROXY_SECRET" ]; then
-  write_text_file "telemt/proxy-secret" "$PROXY_SECRET"
-fi
 
 DB_CONTAINER="$(find_service_container remnawave-db remnawave-db)"
 DB_ENV_JSON="$(db_container_env_json "$DB_CONTAINER" 2>/dev/null || echo '{}')"
@@ -294,7 +253,7 @@ else
 fi
 
 docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' > "${STAGE_DIR}/inventory/docker_ps.txt" || true
-systemctl --no-pager --type=service --state=running 2>/dev/null | egrep 'ops-agent|iris-node-registrar|docker|nginx|warp|telemt' > "${STAGE_DIR}/inventory/services.txt" || true
+systemctl --no-pager --type=service --state=running 2>/dev/null | egrep 'ops-agent|iris-node-registrar|docker|nginx|warp' > "${STAGE_DIR}/inventory/services.txt" || true
 
 export MANIFEST_PATH="${STAGE_DIR}/inventory/manifest.json"
 export MANIFEST_HOSTNAME="$HOST_SHORT"
@@ -302,15 +261,12 @@ export MANIFEST_CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export MANIFEST_PUBLIC_HOST="${PUBLIC_HOST}"
 export MANIFEST_ADMIN_DOMAIN="${ADMIN_DOMAIN}"
 export MANIFEST_SUB_DOMAIN="${SUB_DOMAIN}"
-export MANIFEST_MTPROXY_HOST="${MTPROXY_HOST}"
 export MANIFEST_REPO_DIR="${REPO_DIR}"
 export MANIFEST_IRIS_DIR="${IRIS_DIR}"
 export MANIFEST_REMNAWAVE_DIR="${REMNAWAVE_DIR}"
 export MANIFEST_NGINX_DIR="${NGINX_DIR}"
 export MANIFEST_CADDY_DIR="${CADDY_DIR}"
 export MANIFEST_SUBSCRIPTION_DIR="${SUBSCRIPTION_DIR}"
-export MANIFEST_TELEMT_DIR="${TELEMT_DIR}"
-export MANIFEST_USER_BOT_DIR="${USER_BOT_DIR}"
 export MANIFEST_REMNANODE_DIR="${REMNANODE_DIR}"
 export MANIFEST_SITE_DIR="${SITE_DIR}"
 export MANIFEST_DB_DUMP_STATUS="${DB_DUMP_STATUS}"
@@ -329,7 +285,6 @@ manifest = {
     "public_host": os.environ.get("MANIFEST_PUBLIC_HOST", ""),
     "admin_domain": os.environ.get("MANIFEST_ADMIN_DOMAIN", ""),
     "sub_domain": os.environ.get("MANIFEST_SUB_DOMAIN", ""),
-    "mtproxy_host": os.environ.get("MANIFEST_MTPROXY_HOST", ""),
     "paths": {
         "repo": os.environ.get("MANIFEST_REPO_DIR", ""),
         "iris": os.environ.get("MANIFEST_IRIS_DIR", ""),
@@ -337,8 +292,6 @@ manifest = {
         "nginx": os.environ.get("MANIFEST_NGINX_DIR", ""),
         "caddy": os.environ.get("MANIFEST_CADDY_DIR", ""),
         "subscription": os.environ.get("MANIFEST_SUBSCRIPTION_DIR", ""),
-        "telemt": os.environ.get("MANIFEST_TELEMT_DIR", ""),
-        "user_bot": os.environ.get("MANIFEST_USER_BOT_DIR", ""),
         "remnanode": os.environ.get("MANIFEST_REMNANODE_DIR", ""),
         "site": os.environ.get("MANIFEST_SITE_DIR", ""),
     },
@@ -352,8 +305,6 @@ manifest = {
         "nginx": "ok" if os.environ.get("MANIFEST_NGINX_DIR") else "missing",
         "caddy": "ok" if os.environ.get("MANIFEST_CADDY_DIR") else "missing",
         "subscription": "ok" if os.environ.get("MANIFEST_SUBSCRIPTION_DIR") else "missing",
-        "mtproto": "ok" if os.environ.get("MANIFEST_TELEMT_DIR") else "missing",
-        "user_bot": "ok" if os.environ.get("MANIFEST_USER_BOT_DIR") else "missing",
         "remnanode": "ok" if os.environ.get("MANIFEST_REMNANODE_DIR") else "missing",
         "site": "ok" if os.environ.get("MANIFEST_SITE_DIR") else "missing",
         "db_dump": os.environ.get("MANIFEST_DB_DUMP_STATUS", "missing"),
@@ -381,9 +332,14 @@ Current environment:
 - panel public host: ${PUBLIC_HOST:-n/a}
 - panel domain: ${ADMIN_DOMAIN:-n/a}
 - subscription domain: ${SUB_DOMAIN:-n/a}
-- mtproto public host: ${MTPROXY_HOST:-n/a}
 - iris repo remote: ${REPO_REMOTE:-n/a}
 - iris repo commit: ${REPO_COMMIT:-n/a}
+
+Practical port layout:
+- 443 -> Remnawave panel
+- 8443 -> reserve for MTProto if it exists on the same host
+- 2222 -> node API / control port
+- 2053 -> preferred public port for local node client configs
 
 Recommended restore order:
 1. Prepare a new Linux host with Docker Engine and docker compose plugin.
@@ -391,8 +347,6 @@ Recommended restore order:
 3. Run: sudo bash scripts/restore-remnawave-migration-pack.sh
 4. If public IP changes, update:
    - /opt/iris-remnawave/.env -> PUBLIC_HOST
-   - /opt/telemt/config.toml -> public_host
-   - /opt/iris_user/.env -> MTPROXY_URL
 5. If domains change, update:
    - /opt/remnawave/.env -> FRONT_END_DOMAIN, SUB_PUBLIC_DOMAIN
    - /opt/remnawave/subscription/.env -> REMNAWAVE_PANEL_URL
@@ -402,9 +356,13 @@ Smoke checks after restore:
 - panel frontend opens
 - subscription page opens
 - Remnawave API responds
+- local node answers correctly on 2222 if this host carries one
 - I.R.I.S. answers in Telegram
-- MTProto accepts connections
-- user bot still serves clients
+
+Out of scope for this toolkit:
+- MTProto
+- user bot
+- their port and endpoint adjustments must be checked manually after the move
 EOF
 
 tar -czf "$ARCHIVE_PATH" -C "$STAGE_DIR" .

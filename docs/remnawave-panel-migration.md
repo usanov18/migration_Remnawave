@@ -1,40 +1,56 @@
 # Remnawave Panel Migration Guide
 
-This guide is written for the common real-world layout where one main host carries:
+This guide is focused on one thing:
 
-- `Remnawave Panel`
-- `PostgreSQL + Redis`
-- bundled `subscription page`
-- reverse proxy (`nginx` or `Caddy`)
-- `MTProto`
-- `user bot`
-- optional local `Remnawave Node`
+- moving and restoring the `Remnawave` panel stack
+
+It is intentionally centered on:
+
+- `Remnawave`
+- `subscription page`
+- reverse proxy
+- local `Remnawave Node`
 - optional `I.R.I.S.` admin-layer
 
-The goal of this guide is simple:
+It is **not** a migration project for:
 
-- make migration predictable
-- keep all generated artifacts in one obvious place
-- give a beginner-safe order of actions
+- `MTProto`
+- `user bot`
+
+Those services may exist on the same host, but they are treated here only as neighboring services that affect your port layout.
 
 ## 1. Fixed Workspace
 
-All generated migration artifacts are kept under:
+All generated artifacts live under:
 
 ```text
 /home/
 ```
 
-In practice, that means:
+That means:
 
-- the migration archive appears in `/home/`
-- the checksum file appears in `/home/`
+- the migration archive is created in `/home/`
+- the checksum file is created in `/home/`
 - restore staging lives in `/home/remnawave-migration-restore/`
-- pre-restore safety snapshots live in `/home/pre-restore-snapshot_<timestamp>/`
+- pre-restore snapshots live in `/home/pre-restore-snapshot_<timestamp>/`
 
-You do not need to edit the scripts to change this path.
+## 2. Practical Port Layout
 
-## 2. The Three Main Scripts
+If panel services and a local node share one host, the most practical layout is:
+
+- `443` — `Remnawave` panel
+- `8443` — reserved for `MTProto` if it exists next to the panel
+- `2222` — node API / control port
+- `2053` — preferred public port for local node client configs
+
+Why `2053` is recommended for local node configs:
+
+- `443` is already occupied by the panel
+- `8443` is better kept for `MTProto`
+- `2222` is needed by the node itself
+- `2053` usually remains the cleanest public port for client-facing node traffic
+
+## 3. The Three Main Scripts
 
 ### Build a Migration Archive
 
@@ -69,8 +85,7 @@ Useful overrides:
 sudo bash scripts/restore-remnawave-migration-pack.sh \
   --public-host 203.0.113.10 \
   --admin-domain admin.example.com \
-  --subscription-domain sub.example.com \
-  --mtproto-host 203.0.113.10
+  --subscription-domain sub.example.com
 ```
 
 File-only mode:
@@ -89,9 +104,9 @@ sudo bash scripts/bootstrap-remnawave-host.sh \
 
 This path is for a fresh server when you do not need the old runtime state.
 
-## 3. What the Archive Collects
+## 4. What the Archive Collects
 
-The current migration archive is designed around the real production layout and may include:
+The archive is focused on the panel stack and may include:
 
 - `/opt/remnawave/.env`
 - `/opt/remnawave/docker-compose.yml`
@@ -103,10 +118,6 @@ The current migration archive is designed around the real production layout and 
 - `/opt/iris-remnawave/docker-compose.yml`
 - `/opt/iris-remnawave/state/bot_users.db`
 - `/opt/iris-remnawave/state/traffic_cache.json`
-- `/opt/telemt/*`
-- `/opt/iris_user/.env`
-- `/opt/iris_user/docker-compose.yml`
-- `/opt/iris_user/data/bot.db`
 - `/opt/remnanode/*`
 - `/opt/rnexus-site/*`
 - `inventory/manifest.json`
@@ -114,20 +125,15 @@ The current migration archive is designed around the real production layout and 
 - `inventory/services.txt`
 - `inventory/restore_notes.txt`
 
-The manifest also stores:
+The manifest stores:
 
 - public host
 - panel domain
 - subscription domain
-- MTProto public host
 - `I.R.I.S.` git remote
 - `I.R.I.S.` git commit
 
-That allows restore to bring back the same bot-side revision if the bot was part of the old host.
-
-## 4. Easiest Real Migration Flow
-
-This is the safest beginner flow.
+## 5. Beginner-Safe Real Migration Flow
 
 ### Step 1. Build the Archive on the Old Server
 
@@ -137,9 +143,9 @@ cd migration_Remnawave
 sudo bash scripts/build-remnawave-migration-pack.sh
 ```
 
-After the script finishes, look inside `/home/`.
+After that, check `/home/`.
 
-You should see something like:
+You should see:
 
 ```text
 /home/remnawave_migration_pack_oldhost_20260323_120000.tar.gz
@@ -162,8 +168,8 @@ The new server should have:
 - Linux
 - Docker Engine
 - Docker Compose plugin
-- enough RAM and disk for your stack
-- open ports for your public services
+- enough RAM and disk
+- open public ports for the panel stack
 
 ### Step 4. Run Restore on the New Server
 
@@ -181,11 +187,10 @@ Use restore with overrides:
 sudo bash scripts/restore-remnawave-migration-pack.sh \
   --public-host 203.0.113.10 \
   --admin-domain admin.example.com \
-  --subscription-domain sub.example.com \
-  --mtproto-host 203.0.113.10
+  --subscription-domain sub.example.com
 ```
 
-## 5. What Restore Changes for You
+## 6. What Restore Changes for You
 
 If you pass overrides, the restore script can automatically update:
 
@@ -207,35 +212,23 @@ If you pass overrides, the restore script can automatically update:
 - `/opt/remnawave/subscription/.env`
   - `REMNAWAVE_PANEL_URL`
 
-### `MTProto`
+## 7. Startup Order Used by Restore
 
-- `/opt/telemt/config.toml`
-  - `public_host`
-
-### `user bot`
-
-- `/opt/iris_user/.env`
-  - `MTPROXY_URL`
-
-## 6. Startup Order Used by the Restore Script
-
-The restore script brings the stack back in this order:
+The restore script starts the stack in this order:
 
 1. `remnawave-db` and `remnawave-redis`
 2. SQL import into `Remnawave`
 3. `Remnawave` backend
-4. bundled subscription page
+4. bundled `subscription page`
 5. reverse proxy (`Caddy` first, otherwise `nginx`)
-6. `MTProto`
-7. `user bot`
-8. local `Remnawave Node`
-9. `I.R.I.S.` and local `ops-agent`
+6. local `Remnawave Node`
+7. `I.R.I.S.` and local `ops-agent`
 
 This order is one of the main reasons to use the script instead of restoring everything manually.
 
-## 7. Clean Bootstrap Path
+## 8. Clean Bootstrap Path
 
-If you do not want to move the old state and only want a clean official-style base:
+If you only want a fresh official-style base:
 
 ```bash
 git clone https://github.com/usanov18/migration_Remnawave.git
@@ -263,9 +256,9 @@ What bootstrap does:
 - prepares a simple `Caddy` reverse proxy
 - starts the base stack
 
-## 8. Smoke Checks After Restore
+## 9. Smoke Checks After Restore
 
-After restore, check these items in order:
+After restore, check in this order:
 
 ### Public Front
 
@@ -276,34 +269,44 @@ After restore, check these items in order:
 
 - the `Remnawave` API responds
 
-### Supporting Services
+### Local Node
 
-- `MTProto` accepts connections
-- the user bot still works
 - the local node is alive, if it belonged to the old host
+- its control/API port `2222` answers correctly
+- client-facing configs use `2053` if that is your chosen production layout
 
 ### Admin Layer
 
-- `I.R.I.S.` responds in Telegram, if it was part of the old server
+- `I.R.I.S.` responds in Telegram, if it was part of the old host
 
-## 9. Safety Notes
+## 10. Important Neighbor Notes
+
+`MTProto` and `user bot` are intentionally outside this migration toolkit.
+
+Still, if they live on the same machine, do not forget:
+
+- keep `8443` clean for `MTProto`
+- do not let `MTProto` conflict with `443` and `2222`
+- re-check user-bot endpoints manually after the move
+
+## 11. Safety Notes
 
 - the archive contains secrets, tokens, and private keys
 - treat it as a sensitive secret
 - keep the checksum file next to the archive
-- do not leave restore staging on random servers longer than needed
-- keep the pre-restore snapshot until you are sure the move is complete
+- do not leave restore staging longer than needed
+- keep the pre-restore snapshot until the move is fully verified
 
-## 10. When to Choose Which Path
+## 12. When to Choose Which Path
 
 Choose `build + restore` if:
 
 - you want the new server to be as close as possible to the old one
 - you need the current production database
-- you want to preserve the current supporting services
+- you want the current panel stack and local node
 
 Choose `bootstrap` if:
 
 - you want a fresh clean host
 - you do not need the old production state
-- you want to rebuild carefully from an official base
+- you want to rebuild from a clean official base
