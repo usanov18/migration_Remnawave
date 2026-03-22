@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-OUT_DIR="/home/alt441"
+OUT_DIR="/home"
 RESTORE_ROOT="${OUT_DIR}/remnawave-migration-restore"
 ORIGINAL_ARGS=("$@")
 
@@ -22,7 +22,7 @@ Usage:
   sudo bash scripts/restore-remnawave-migration-pack.sh [options]
 
 Options:
-  --archive PATH               Explicit archive path. Default: latest /home/alt441/remnawave_migration_pack_*.tar.gz
+  --archive PATH               Explicit archive path. Default: latest /home/remnawave_migration_pack_*.tar.gz
   --public-host VALUE          Override PUBLIC_HOST for I.R.I.S.
   --admin-domain VALUE         Override Remnawave panel domain
   --subscription-domain VALUE  Override subscription page domain
@@ -314,7 +314,7 @@ mkdir -p "$OUT_DIR" "$RESTORE_ROOT"
 if [ -z "$ARCHIVE_PATH" ]; then
   ARCHIVE_PATH="$(ls -1t "${OUT_DIR}"/remnawave_migration_pack_*.tar.gz 2>/dev/null | head -n1 || true)"
 fi
-[ -n "$ARCHIVE_PATH" ] || die "Migration archive not found in ${OUT_DIR}"
+[ -n "$ARCHIVE_PATH" ] || die "Migration archive not found in ${OUT_DIR}. Copy remnawave_migration_pack_*.tar.gz into /home/ or pass --archive PATH"
 [ -f "$ARCHIVE_PATH" ] || die "Archive does not exist: ${ARCHIVE_PATH}"
 
 STAMP="$(date -u +%Y%m%d_%H%M%S)"
@@ -443,3 +443,18 @@ log "Restore finished successfully"
 log "Archive: ${ARCHIVE_PATH}"
 log "Restore dir: ${WORK_DIR}"
 log "Pre-restore snapshot: ${PRE_RESTORE_DIR}"
+
+cat <<EOF
+
+Next checks:
+1. Open the panel domain in a browser.
+2. Open the subscription page.
+3. Confirm Remnawave API answers.
+4. Confirm MTProto accepts connections.
+5. Confirm the user bot still works.
+6. Reconnect I.R.I.S. if this host also carries the bot.
+
+Artifacts created during restore:
+- restore staging: ${WORK_DIR}
+- pre-restore snapshot: ${PRE_RESTORE_DIR}
+EOF

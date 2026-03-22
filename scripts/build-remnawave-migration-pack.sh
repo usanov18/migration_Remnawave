@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-OUT_DIR="/home/alt441"
+OUT_DIR="/home"
 STAGE_ROOT="${OUT_DIR}/remnawave-migration-build"
 ORIGINAL_ARGS=("$@")
 
@@ -14,7 +14,7 @@ usage() {
 Usage:
   sudo bash scripts/build-remnawave-migration-pack.sh
 
-Builds a host-side Remnawave migration pack into /home/alt441/.
+Builds a host-side Remnawave migration pack into /home/.
 EOF
 }
 
@@ -372,9 +372,9 @@ Remnawave Panel Migration Pack
 Archive path:
 - ${ARCHIVE_PATH}
 
-Hardcoded operator workspace:
-- archive output: /home/alt441/
-- restore staging: /home/alt441/remnawave-migration-restore/
+Fixed operator workspace:
+- archive output: /home/
+- restore staging: /home/remnawave-migration-restore/
 
 Current environment:
 - panel host: ${HOST_SHORT}
@@ -387,7 +387,7 @@ Current environment:
 
 Recommended restore order:
 1. Prepare a new Linux host with Docker Engine and docker compose plugin.
-2. Copy the archive into /home/alt441/.
+2. Copy the archive into /home/.
 3. Run: sudo bash scripts/restore-remnawave-migration-pack.sh
 4. If public IP changes, update:
    - /opt/iris-remnawave/.env -> PUBLIC_HOST
@@ -414,3 +414,20 @@ log "Migration pack created"
 log "Archive: $ARCHIVE_PATH"
 log "Checksum: $SHA_PATH"
 log "Staging dir: $STAGE_DIR"
+
+cat <<EOF
+
+Next steps:
+1. Copy these two files to the new server:
+   - ${ARCHIVE_PATH}
+   - ${SHA_PATH}
+2. Place them into /home/ on the target host.
+3. Clone migration_Remnawave on the target host.
+4. Run:
+   sudo bash scripts/restore-remnawave-migration-pack.sh
+
+Artifacts now stored in:
+- archive: ${ARCHIVE_PATH}
+- checksum: ${SHA_PATH}
+- build staging: ${STAGE_DIR}
+EOF
