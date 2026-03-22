@@ -347,8 +347,11 @@ Next recommended steps:
 2. If you skipped subscription token, create an API token in Remnawave Settings -> API Tokens and place it into ${SUBSCRIPTION_DIR}/.env.
 3. Start the subscription page if needed:
    cd ${SUBSCRIPTION_DIR} && docker compose up -d
-4. Install I.R.I.S. admin-layer:
-   git clone https://github.com/usanov18/iris-remnawave.git /opt/iris-remnawave
-   cd /opt/iris-remnawave
-   bash install-bot.sh
+4. If you use a local Remnawave Node on the same host, keep this layout in mind:
+   - 443 for the panel
+   - 2222 for node API/control
+   - 2053 as the preferred public port for node client configs
+   - 8443 reserved for MTProto if it exists nearby
+5. If you use I.R.I.S., deploy it separately only after the panel is healthy:
+   - https://github.com/usanov18/iris-remnawave
 EOF

@@ -6,7 +6,6 @@ RESTORE_ROOT="${OUT_DIR}/remnawave-migration-restore"
 ORIGINAL_ARGS=("$@")
 
 ARCHIVE_PATH=""
-PUBLIC_HOST_OVERRIDE=""
 ADMIN_DOMAIN_OVERRIDE=""
 SUBSCRIPTION_DOMAIN_OVERRIDE=""
 SKIP_START="0"
@@ -22,7 +21,6 @@ Usage:
 
 Options:
   --archive PATH               Explicit archive path. Default: latest /home/remnawave_migration_pack_*.tar.gz
-  --public-host VALUE          Override PUBLIC_HOST for I.R.I.S.
   --admin-domain VALUE         Override Remnawave panel domain
   --subscription-domain VALUE  Override subscription page domain
   --skip-start                 Restore files only, do not start services
@@ -182,33 +180,10 @@ wait_for_container_healthy() {
   return 1
 }
 
-clone_or_prepare_iris_repo() {
-  local repo_remote="$1"
-  local repo_commit="$2"
-  if [ -d /opt/iris-remnawave/.git ]; then
-    log "I.R.I.S. repo already present at /opt/iris-remnawave"
-    return 0
-  fi
-  [ -n "$repo_remote" ] || {
-    warn "I.R.I.S. git remote is missing in manifest; restore will rely only on archived config files"
-    return 0
-  }
-  log "Cloning I.R.I.S. repo from ${repo_remote}"
-  rm -rf /opt/iris-remnawave
-  git clone "$repo_remote" /opt/iris-remnawave
-  if [ -n "$repo_commit" ]; then
-    git -C /opt/iris-remnawave checkout "$repo_commit" || warn "Could not checkout ${repo_commit}; keeping default branch state"
-  fi
-}
-
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --archive)
       ARCHIVE_PATH="${2:-}"
-      shift 2
-      ;;
-    --public-host)
-      PUBLIC_HOST_OVERRIDE="${2:-}"
       shift 2
       ;;
     --admin-domain)
@@ -239,7 +214,6 @@ require_cmd bash
 require_cmd tar
 require_cmd docker
 require_cmd python3
-require_cmd git
 require_cmd hostname
 require_cmd date
 
@@ -260,40 +234,23 @@ log "Extracting ${ARCHIVE_PATH} into ${WORK_DIR}"
 tar -xzf "$ARCHIVE_PATH" -C "$WORK_DIR"
 
 MANIFEST_PATH="${WORK_DIR}/inventory/manifest.json"
-OLD_PUBLIC_HOST="$(manifest_read public_host)"
 OLD_ADMIN_DOMAIN="$(manifest_read admin_domain)"
 OLD_SUB_DOMAIN="$(manifest_read sub_domain)"
-IRIS_REPO_REMOTE="$(manifest_read git.remote)"
-IRIS_REPO_COMMIT="$(manifest_read git.commit)"
-
-clone_or_prepare_iris_repo "$IRIS_REPO_REMOTE" "$IRIS_REPO_COMMIT"
 
 restore_tree "remnawave" "/opt/remnawave"
 restore_tree "remnanode" "/opt/remnanode"
 restore_tree "rnexus-site" "/opt/rnexus-site"
 
-restore_file "iris-remnawave/.env" "/opt/iris-remnawave/.env"
-restore_file "iris-remnawave/docker-compose.yml" "/opt/iris-remnawave/docker-compose.yml"
-restore_file "iris-remnawave/state/bot_users.db" "/opt/iris-remnawave/state/bot_users.db"
-restore_file "iris-remnawave/state/traffic_cache.json" "/opt/iris-remnawave/state/traffic_cache.json"
-
 ADMIN_DOMAIN_FINAL="$(normalize_domain "${ADMIN_DOMAIN_OVERRIDE:-$OLD_ADMIN_DOMAIN}")"
 SUB_DOMAIN_FINAL="$(normalize_domain "${SUBSCRIPTION_DOMAIN_OVERRIDE:-$OLD_SUB_DOMAIN}")"
-PUBLIC_HOST_FINAL="${PUBLIC_HOST_OVERRIDE:-$OLD_PUBLIC_HOST}"
 
 if [ -n "$ADMIN_DOMAIN_FINAL" ]; then
   upsert_env_key "/opt/remnawave/.env" "FRONT_END_DOMAIN" "$ADMIN_DOMAIN_FINAL"
   upsert_env_key "/opt/remnawave/subscription/.env" "REMNAWAVE_PANEL_URL" "$(normalize_url "$ADMIN_DOMAIN_FINAL")"
-  upsert_env_key "/opt/iris-remnawave/.env" "REMNAWAVE_URL" "$(normalize_url "$ADMIN_DOMAIN_FINAL")"
 fi
 
 if [ -n "$SUB_DOMAIN_FINAL" ]; then
   upsert_env_key "/opt/remnawave/.env" "SUB_PUBLIC_DOMAIN" "$SUB_DOMAIN_FINAL"
-  upsert_env_key "/opt/iris-remnawave/.env" "REMNAWAVE_SUB_URL" "$(normalize_url "$SUB_DOMAIN_FINAL")"
-fi
-
-if [ -n "$PUBLIC_HOST_FINAL" ]; then
-  upsert_env_key "/opt/iris-remnawave/.env" "PUBLIC_HOST" "$PUBLIC_HOST_FINAL"
 fi
 
 if [ "$SKIP_START" = "1" ]; then
@@ -345,14 +302,6 @@ if [ -f /opt/remnanode/docker-compose.yml ]; then
   (cd /opt/remnanode && docker compose up -d)
 fi
 
-if [ -f /opt/iris-remnawave/docker-compose.yml ]; then
-  log "Starting I.R.I.S. admin-layer"
-  (cd /opt/iris-remnawave && docker compose up -d --build)
-  if [ -f /opt/iris-remnawave/ops-agent/install.sh ]; then
-    (cd /opt/iris-remnawave && bash ops-agent/install.sh) || warn "Local ops-agent reinstall failed"
-  fi
-fi
-
 log "Restore finished successfully"
 log "Archive: ${ARCHIVE_PATH}"
 log "Restore dir: ${WORK_DIR}"
@@ -366,8 +315,8 @@ Next checks:
 3. Confirm Remnawave API answers.
 4. Confirm the local node works on port 2222 if this host carries one.
 5. Confirm client-facing node configs use 2053 if that is your production layout.
-6. Reconnect I.R.I.S. if this host also carries the bot.
-7. If MTProto or user bot live on the same machine, verify them manually. They are out of scope for this toolkit.
+6. If you use I.R.I.S., redeploy it separately from the iris-remnawave repo only after the panel restore is complete.
+7. Do not pull MTProto or user bot into this restore flow; verify or redeploy them separately.
 
 Artifacts created during restore:
 - restore staging: ${WORK_DIR}

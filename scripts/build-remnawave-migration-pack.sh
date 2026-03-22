@@ -179,7 +179,6 @@ require_cmd tar
 require_cmd sha256sum
 require_cmd hostname
 require_cmd date
-require_cmd git
 
 mkdir -p "$OUT_DIR"
 TIMESTAMP="$(date -u +%Y%m%d_%H%M%S)"
@@ -191,8 +190,6 @@ SHA_PATH="${ARCHIVE_PATH}.sha256"
 rm -rf "$STAGE_DIR"
 mkdir -p "$STAGE_DIR"
 
-REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." >/dev/null 2>&1 && pwd -P)"
-IRIS_DIR="$(pick_existing_dir docker-compose.yml /opt/iris-remnawave /opt/iris /srv/iris-remnawave || true)"
 REMNAWAVE_DIR="$(pick_existing_dir docker-compose.yml /opt/remnawave /srv/remnawave || true)"
 NGINX_DIR="$(pick_existing_dir docker-compose.yml /opt/remnawave/nginx /srv/remnawave/nginx || true)"
 CADDY_DIR="$(pick_existing_dir docker-compose.yml /opt/remnawave/caddy /srv/remnawave/caddy || true)"
@@ -203,25 +200,14 @@ NGINX_CONTAINER="$(find_service_container remnawave-nginx remnawave-nginx)"
 SITE_DIR="$(container_mount_source "$NGINX_CONTAINER" /var/www/rnexus 2>/dev/null || true)"
 [ -n "$SITE_DIR" ] || SITE_DIR="$(pick_existing_dir "" /opt/rnexus-site /srv/rnexus-site || true)"
 
-IRIS_ENV="${IRIS_DIR}/.env"
 REMNAWAVE_ENV="${REMNAWAVE_DIR}/.env"
 SUB_ENV="${SUBSCRIPTION_DIR}/.env"
 
-PUBLIC_HOST="$(read_env_value "$IRIS_ENV" PUBLIC_HOST)"
-ADMIN_DOMAIN="$(host_from_url "$(read_env_value "$IRIS_ENV" REMNAWAVE_URL)")"
-[ -n "$ADMIN_DOMAIN" ] || ADMIN_DOMAIN="$(read_env_value "$REMNAWAVE_ENV" FRONT_END_DOMAIN)"
-SUB_DOMAIN="$(host_from_url "$(read_env_value "$IRIS_ENV" REMNAWAVE_SUB_URL)")"
-[ -n "$SUB_DOMAIN" ] || SUB_DOMAIN="$(host_from_url "$(read_env_value "$SUB_ENV" REMNAWAVE_PANEL_URL)")"
+ADMIN_DOMAIN="$(read_env_value "$REMNAWAVE_ENV" FRONT_END_DOMAIN)"
+SUB_DOMAIN="$(host_from_url "$(read_env_value "$SUB_ENV" REMNAWAVE_PANEL_URL)")"
 [ -n "$SUB_DOMAIN" ] || SUB_DOMAIN="$(read_env_value "$REMNAWAVE_ENV" SUB_PUBLIC_DOMAIN)"
-REPO_REMOTE="$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || true)"
-REPO_COMMIT="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || true)"
 
 log "Building migration pack in ${ARCHIVE_PATH}"
-
-copy_file_if_exists "${IRIS_DIR}/.env" "iris-remnawave/.env" || true
-copy_file_if_exists "${IRIS_DIR}/docker-compose.yml" "iris-remnawave/docker-compose.yml" || true
-copy_file_if_exists "${IRIS_DIR}/state/bot_users.db" "iris-remnawave/state/bot_users.db" || true
-copy_file_if_exists "${IRIS_DIR}/state/traffic_cache.json" "iris-remnawave/state/traffic_cache.json" || true
 
 copy_file_if_exists "${REMNAWAVE_DIR}/.env" "remnawave/.env" || true
 copy_file_if_exists "${REMNAWAVE_DIR}/docker-compose.yml" "remnawave/docker-compose.yml" || true
@@ -258,11 +244,8 @@ systemctl --no-pager --type=service --state=running 2>/dev/null | egrep 'ops-age
 export MANIFEST_PATH="${STAGE_DIR}/inventory/manifest.json"
 export MANIFEST_HOSTNAME="$HOST_SHORT"
 export MANIFEST_CREATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-export MANIFEST_PUBLIC_HOST="${PUBLIC_HOST}"
 export MANIFEST_ADMIN_DOMAIN="${ADMIN_DOMAIN}"
 export MANIFEST_SUB_DOMAIN="${SUB_DOMAIN}"
-export MANIFEST_REPO_DIR="${REPO_DIR}"
-export MANIFEST_IRIS_DIR="${IRIS_DIR}"
 export MANIFEST_REMNAWAVE_DIR="${REMNAWAVE_DIR}"
 export MANIFEST_NGINX_DIR="${NGINX_DIR}"
 export MANIFEST_CADDY_DIR="${CADDY_DIR}"
@@ -270,8 +253,6 @@ export MANIFEST_SUBSCRIPTION_DIR="${SUBSCRIPTION_DIR}"
 export MANIFEST_REMNANODE_DIR="${REMNANODE_DIR}"
 export MANIFEST_SITE_DIR="${SITE_DIR}"
 export MANIFEST_DB_DUMP_STATUS="${DB_DUMP_STATUS}"
-export MANIFEST_REPO_REMOTE="${REPO_REMOTE}"
-export MANIFEST_REPO_COMMIT="${REPO_COMMIT}"
 
 python3 - <<'PY'
 import json
@@ -282,12 +263,9 @@ manifest = {
     "created_at_utc": os.environ.get("MANIFEST_CREATED_AT", ""),
     "host": os.environ.get("MANIFEST_HOSTNAME", ""),
     "backup_type": "remnawave-migration-pack-host-script",
-    "public_host": os.environ.get("MANIFEST_PUBLIC_HOST", ""),
     "admin_domain": os.environ.get("MANIFEST_ADMIN_DOMAIN", ""),
     "sub_domain": os.environ.get("MANIFEST_SUB_DOMAIN", ""),
     "paths": {
-        "repo": os.environ.get("MANIFEST_REPO_DIR", ""),
-        "iris": os.environ.get("MANIFEST_IRIS_DIR", ""),
         "remnawave": os.environ.get("MANIFEST_REMNAWAVE_DIR", ""),
         "nginx": os.environ.get("MANIFEST_NGINX_DIR", ""),
         "caddy": os.environ.get("MANIFEST_CADDY_DIR", ""),
@@ -295,12 +273,7 @@ manifest = {
         "remnanode": os.environ.get("MANIFEST_REMNANODE_DIR", ""),
         "site": os.environ.get("MANIFEST_SITE_DIR", ""),
     },
-    "git": {
-        "remote": os.environ.get("MANIFEST_REPO_REMOTE", ""),
-        "commit": os.environ.get("MANIFEST_REPO_COMMIT", ""),
-    },
     "components": {
-        "iris": "ok" if os.environ.get("MANIFEST_IRIS_DIR") else "missing",
         "remnawave": "ok" if os.environ.get("MANIFEST_REMNAWAVE_DIR") else "missing",
         "nginx": "ok" if os.environ.get("MANIFEST_NGINX_DIR") else "missing",
         "caddy": "ok" if os.environ.get("MANIFEST_CADDY_DIR") else "missing",
@@ -329,11 +302,8 @@ Fixed operator workspace:
 
 Current environment:
 - panel host: ${HOST_SHORT}
-- panel public host: ${PUBLIC_HOST:-n/a}
 - panel domain: ${ADMIN_DOMAIN:-n/a}
 - subscription domain: ${SUB_DOMAIN:-n/a}
-- iris repo remote: ${REPO_REMOTE:-n/a}
-- iris repo commit: ${REPO_COMMIT:-n/a}
 
 Practical port layout:
 - 443 -> Remnawave panel
@@ -345,9 +315,7 @@ Recommended restore order:
 1. Prepare a new Linux host with Docker Engine and docker compose plugin.
 2. Copy the archive into /home/.
 3. Run: sudo bash scripts/restore-remnawave-migration-pack.sh
-4. If public IP changes, update:
-   - /opt/iris-remnawave/.env -> PUBLIC_HOST
-5. If domains change, update:
+4. If domains change, update:
    - /opt/remnawave/.env -> FRONT_END_DOMAIN, SUB_PUBLIC_DOMAIN
    - /opt/remnawave/subscription/.env -> REMNAWAVE_PANEL_URL
    - reverse proxy config in /opt/remnawave/nginx or /opt/remnawave/caddy
@@ -357,12 +325,13 @@ Smoke checks after restore:
 - subscription page opens
 - Remnawave API responds
 - local node answers correctly on 2222 if this host carries one
-- I.R.I.S. answers in Telegram
 
 Out of scope for this toolkit:
+- I.R.I.S.
 - MTProto
 - user bot
-- their port and endpoint adjustments must be checked manually after the move
+- do not pull them into this migration archive
+- redeploy or reconnect them separately after panel restore is complete
 EOF
 
 tar -czf "$ARCHIVE_PATH" -C "$STAGE_DIR" .

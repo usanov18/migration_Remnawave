@@ -1,7 +1,7 @@
 # migration_Remnawave
 
 > 🚚 Remnawave Migration & Bootstrap Toolkit  
-> A focused operator project for moving, restoring, and rebuilding a Remnawave host without guesswork.
+> Focused on the panel, its core dependencies, and the local node.
 
 [🇷🇺 Русская версия](#-русская-версия) • [🇬🇧 English Version](#-english-version)
 
@@ -13,58 +13,66 @@
 
 ### ✨ Что это
 
-`migration_Remnawave` — это отдельный проект для:
+`migration_Remnawave` — это отдельный toolkit для двух понятных задач:
 
-- 🚚 переезда `Remnawave Panel` на новый VPS
-- 📦 сборки migration archive со старого сервера
-- ♻️ восстановления панели на новом сервере
-- 🏗️ быстрого bootstrap чистого `Remnawave` host
+- 🚚 перевезти текущую `Remnawave Panel` на новый VPS
+- 🏗️ быстро поднять чистый `Remnawave` host с нуля
 
-Это **не проект для MTProto** и **не проект для user bot**.  
-Они могут жить рядом на том же сервере, но этот toolkit сознательно сфокусирован на:
+Главный фокус проекта:
 
-- `Remnawave`
+- `Remnawave Panel`
+- `PostgreSQL / Redis`
 - `subscription page`
 - reverse proxy
-- локальной `Remnawave Node`
-- `I.R.I.S.` как admin-layer, если он живет на том же хосте
+- локальная `Remnawave Node`
 
-Если нужен Telegram admin-layer:
+### 🎯 Что здесь главное
+
+Этот репозиторий специально **не пытается быть “всем сразу”**.  
+Он нужен именно для того, чтобы:
+
+- сохранить состояние панели
+- перенести ее зависимости
+- не потерять локальную ноду
+- быстро восстановить рабочий стек на новом сервере
+
+### 🚫 Что сюда не входит
+
+В этот migration flow **не входят**:
+
+- `I.R.I.S.`
+- `MTProto`
+- `user bot`
+
+Почему так:
+
+- при реальной миграции панели ботов лучше не тащить архивом
+- их надежнее и чище раскатывать отдельно, уже после того как панель полностью жива
+- это уменьшает риск смешать panel migration с соседними сервисами
+
+Если вам нужен `I.R.I.S.` после переезда панели:
 
 - 🤖 [iris-remnawave](https://github.com/usanov18/iris-remnawave)
 
-### 🎯 Для кого
+### 📚 На что опирается toolkit
 
-Репозиторий собран так, чтобы им смог воспользоваться даже неподготовленный оператор.
-
-Вам не нужно помнить:
-
-- какие папки реально критичны для панели
-- в каком порядке поднимать сервисы
-- где должен лежать archive
-- какие домены и env нужно проверить после restore
-
-Скрипты и документация закрывают это за вас.
-
-### 📚 На чем основано решение
-
-Toolkit собран вокруг официальной модели `Remnawave`:
+Toolkit собран вокруг официальной документации `Remnawave`:
 
 - [Quick start](https://docs.rw/docs/learn/quick-start)
 - [Environment variables](https://docs.rw/docs/install/environment-variables/)
 - [Remnawave Node install](https://docs.rw/docs/install/remnawave-node/)
 - [Caddy reverse proxy](https://docs.rw/docs/install/reverse-proxies/caddy/)
 
-### 🧰 Что лежит в репозитории
+### 🧰 Что есть в репозитории
 
-- [`scripts/build-remnawave-migration-pack.sh`](scripts/build-remnawave-migration-pack.sh) — собрать archive со старого сервера
-- [`scripts/restore-remnawave-migration-pack.sh`](scripts/restore-remnawave-migration-pack.sh) — развернуть archive на новом сервере
-- [`scripts/bootstrap-remnawave-host.sh`](scripts/bootstrap-remnawave-host.sh) — поднять чистый Remnawave host
-- [`docs/remnawave-panel-migration.md`](docs/remnawave-panel-migration.md) — подробный guide
+- [`scripts/build-remnawave-migration-pack.sh`](scripts/build-remnawave-migration-pack.sh) — собрать migration archive со старого сервера
+- [`scripts/restore-remnawave-migration-pack.sh`](scripts/restore-remnawave-migration-pack.sh) — восстановить archive на новом сервере
+- [`scripts/bootstrap-remnawave-host.sh`](scripts/bootstrap-remnawave-host.sh) — поднять чистый `Remnawave` host с нуля
+- [`docs/remnawave-panel-migration.md`](docs/remnawave-panel-migration.md) — подробный operator guide
 
-### 📍 Фиксированный workspace
+### 📍 Где живут архивы и staging
 
-Все build/restore артефакты живут здесь:
+Toolkit специально использует простой и универсальный workspace:
 
 ```text
 /home/
@@ -72,32 +80,32 @@ Toolkit собран вокруг официальной модели `Remnawave
 
 Это значит:
 
-- archive складывается в `/home/`
+- migration archive складывается в `/home/`
 - checksum лежит рядом в `/home/`
 - restore staging живет в `/home/remnawave-migration-restore/`
-- pre-restore snapshot живет в `/home/pre-restore-snapshot_<timestamp>/`
+- pre-restore snapshot сохраняется в `/home/pre-restore-snapshot_<timestamp>/`
 
-### 🧭 Базовая схема портов
+### 🔌 Рекомендуемая схема портов
 
-Если панель и локальная нода живут на одном хосте, удобно держать такую схему:
+Если панель и локальная нода живут на одном хосте, лучше сразу держать такую схему:
 
 - `443` — панель `Remnawave`
-- `8443` — оставить под `MTProto`, если он соседний сервис на этом же сервере
-- `2222` — API / control порт ноды
-- `2053` — предпочтительный внешний порт для конфигов локальной ноды
+- `8443` — оставить под `MTProto`, если он есть рядом
+- `2222` — служебный/API порт ноды
+- `2053` — предпочтительный внешний порт для клиентских конфигов локальной ноды
 
-Почему `2053`:
+Почему это удобно:
 
 - `443` уже нужен панели
-- `8443` лучше оставить под `MTProto`
-- `2222` нужен самой ноде как служебный порт
-- `2053` обычно остается самым удобным и чистым вариантом для клиентских node-конфигов
+- `8443` лучше не занимать, если у вас рядом есть `MTProto`
+- `2222` нужен самой ноде
+- `2053` обычно остается самым спокойным и практичным публичным портом для node-конфигов
 
-### 🚀 Самый простой сценарий для новичка
+## 🚀 Быстрый старт для новичка
 
-#### Вариант A. Перевезти текущую панель как есть
+### Сценарий 1. Перевезти текущую панель на новый сервер
 
-#### 1. На старом сервере
+#### Шаг 1. На старом сервере собрать archive
 
 ```bash
 git clone https://github.com/usanov18/migration_Remnawave.git
@@ -110,14 +118,16 @@ sudo bash scripts/build-remnawave-migration-pack.sh
 - `remnawave_migration_pack_<host>_<timestamp>.tar.gz`
 - `remnawave_migration_pack_<host>_<timestamp>.tar.gz.sha256`
 
-#### 2. Скопировать archive на новый сервер
+#### Шаг 2. Перенести archive на новый сервер
+
+Пример:
 
 ```bash
 scp /home/remnawave_migration_pack_*.tar.gz root@NEW_SERVER_IP:/home/
 scp /home/remnawave_migration_pack_*.tar.gz.sha256 root@NEW_SERVER_IP:/home/
 ```
 
-#### 3. На новом сервере
+#### Шаг 3. На новом сервере развернуть archive
 
 ```bash
 git clone https://github.com/usanov18/migration_Remnawave.git
@@ -125,32 +135,41 @@ cd migration_Remnawave
 sudo bash scripts/restore-remnawave-migration-pack.sh
 ```
 
-Скрипт сам:
+Что сделает скрипт:
 
 - найдет свежий archive в `/home/`
-- распакует его
-- разложит файлы в `/opt/...`
-- импортирует базу `Remnawave`
-- поднимет сервисы в правильном порядке
+- распакует его в staging
+- восстановит файлы панели в `/opt/...`
+- поднимет базу и Redis
+- импортирует SQL dump
+- поднимет backend `Remnawave`
+- поднимет `subscription page`
+- поднимет reverse proxy
+- поднимет локальную `Remnawave Node`, если она была частью старого хоста
 
-#### 4. Если меняются IP или домены
+#### Шаг 4. Если на новом сервере будут другие домены
 
 ```bash
 sudo bash scripts/restore-remnawave-migration-pack.sh \
-  --public-host 203.0.113.10 \
   --admin-domain admin.example.com \
   --subscription-domain sub.example.com
 ```
 
-#### 5. Если сначала нужен сухой прогон
+#### Шаг 5. Если сначала хотите просто разложить файлы
 
 ```bash
 sudo bash scripts/restore-remnawave-migration-pack.sh --skip-start
 ```
 
-### 🏗️ Вариант B. Поднять чистый Remnawave host
+Это удобно, если вы хотите:
 
-Если старый state не нужен:
+- сначала проверить содержимое
+- руками поправить `.env`
+- отдельно посмотреть конфиги proxy или node
+
+### Сценарий 2. Поднять панель с нуля на чистом VPS
+
+Если старое состояние не нужно, используйте bootstrap:
 
 ```bash
 git clone https://github.com/usanov18/migration_Remnawave.git
@@ -160,7 +179,7 @@ sudo bash scripts/bootstrap-remnawave-host.sh \
   --subscription-domain sub.example.com
 ```
 
-Если уже есть API token для bundled subscription page:
+Если у вас уже есть API token для встроенной subscription page:
 
 ```bash
 sudo bash scripts/bootstrap-remnawave-host.sh \
@@ -169,74 +188,82 @@ sudo bash scripts/bootstrap-remnawave-host.sh \
   --subscription-api-token YOUR_REMNAWAVE_API_TOKEN
 ```
 
-### 🧠 Что делает каждый скрипт
+Что делает bootstrap:
 
-#### `build-remnawave-migration-pack.sh`
+- ставит Docker при необходимости
+- забирает актуальный `Remnawave`
+- подготавливает `.env`
+- подготавливает встроенную `subscription page`
+- подготавливает `Caddy`
+- запускает базовый panel stack
 
-Собирает archive в `/home/`.
+## 🧠 Что делает каждый скрипт
 
-В archive входят:
+### `build-remnawave-migration-pack.sh`
+
+Собирает migration archive только из panel-side контура:
 
 - `Remnawave`
 - `subscription page`
-- reverse proxy (`nginx` / `Caddy`)
+- reverse proxy
 - локальная `Remnawave Node`
-- `I.R.I.S.`, если он часть того же хоста
-- SQL dump
-- manifest и restore notes
+- SQL dump базы
+- manifest
+- restore notes
 
-#### `restore-remnawave-migration-pack.sh`
+### `restore-remnawave-migration-pack.sh`
 
-Берет archive из `/home/` и восстанавливает стек.
+Восстанавливает panel-side контур в правильном порядке:
 
-Порядок запуска:
-
-1. база и Redis
+1. `remnawave-db` и `remnawave-redis`
 2. импорт SQL
 3. backend `Remnawave`
 4. `subscription page`
 5. reverse proxy
-6. локальная node
-7. `I.R.I.S.`, если была частью архива
+6. локальная `Remnawave Node`
 
-#### `bootstrap-remnawave-host.sh`
+### `bootstrap-remnawave-host.sh`
 
-Чистый fresh-install путь:
+Готовит чистую базу для нового сервера:
 
-- ставит Docker при необходимости
-- качает официальный backend compose
-- качает официальный bundled subscription page compose
-- генерирует `.env`
-- поднимает базовый стек
+- Docker
+- `Remnawave`
+- `subscription page`
+- `Caddy`
 
-### ✅ Что проверить после restore
+## ✅ Что проверить после restore
 
-- панель открывается
-- открывается subscription page
-- отвечает `Remnawave API`
-- локальная node жива, если она была частью старого хоста
-- `I.R.I.S.` снова отвечает, если он был частью старого хоста
+Проверяйте именно в таком порядке:
 
-### 📌 Что важно помнить про соседние сервисы
+1. Открывается панель в браузере.
+2. Открывается subscription page.
+3. Отвечает `Remnawave API`.
+4. Если на старом хосте была локальная нода — она тоже поднялась.
+5. Node control/API отвечает на `2222`.
+6. Клиентские node-конфиги используют `2053`, если это ваша production-схема.
 
-`MTProto` и `user bot` не входят в migration toolkit этого проекта.
+## 📌 Что делать после того, как панель ожила
 
-Но если они живут рядом на том же сервере, не забудьте руками проверить:
+Когда панель, subscription page и локальная нода уже подтвержденно работают:
 
-- что `8443` не занят чем-то лишним
-- что `MTProto` не конфликтует с портами панели и ноды
-- что user bot по-прежнему смотрит на правильные panel/subscription/mtproxy endpoints
+- при необходимости отдельно раскатить `I.R.I.S.` из [iris-remnawave](https://github.com/usanov18/iris-remnawave)
+- отдельно проверить `MTProto`
+- отдельно проверить `user bot`
 
-### 🔐 Важно
+Это намеренное разделение.  
+Сначала панель и нода. Потом соседние сервисы.
 
-- archive содержит секреты, токены и private keys
-- храните его как чувствительный секрет
+## 🔐 Важно
+
+- archive содержит токены, ключи и чувствительные конфиги
+- храните его как секрет
 - checksum лучше хранить рядом
-- не держите restore staging дольше нужного
+- restore staging не стоит оставлять дольше нужного
+- pre-restore snapshot удаляйте только после полного подтверждения переезда
 
-### 📖 Дальше
+## 📖 Подробнее
 
-Если нужен более подробный operator guide:
+Полный пошаговый guide:
 
 - [`docs/remnawave-panel-migration.md`](docs/remnawave-panel-migration.md)
 
@@ -248,42 +275,50 @@ sudo bash scripts/bootstrap-remnawave-host.sh \
 
 ### ✨ What This Is
 
-`migration_Remnawave` is a dedicated project for:
+`migration_Remnawave` is a dedicated toolkit for two clear jobs:
 
-- 🚚 moving a live `Remnawave Panel` to a new VPS
-- 📦 building a migration archive from the old server
-- ♻️ restoring the panel stack on a new server
-- 🏗️ bootstrapping a clean `Remnawave` host
+- 🚚 move a live `Remnawave Panel` to a new VPS
+- 🏗️ bootstrap a clean `Remnawave` host from scratch
 
-This is **not an MTProto project** and **not a user-bot project**.  
-Those services may live next to the panel on the same host, but this toolkit is intentionally focused on:
+Main focus:
 
-- `Remnawave`
+- `Remnawave Panel`
+- `PostgreSQL / Redis`
 - `subscription page`
 - reverse proxy
 - local `Remnawave Node`
-- `I.R.I.S.` as an admin-layer if it lives on the same host
 
-If you need the Telegram admin-layer:
+### 🎯 What This Repo Is Really About
+
+This repository is intentionally **not trying to migrate everything at once**.  
+Its job is to help you:
+
+- preserve the panel state
+- move the panel dependencies
+- keep the local node
+- restore a working production stack on a new server
+
+### 🚫 What Is Out of Scope
+
+This migration flow does **not** include:
+
+- `I.R.I.S.`
+- `MTProto`
+- `user bot`
+
+Why:
+
+- during a real panel migration, bots are better redeployed separately
+- it is cleaner and safer to restore them only after the panel is healthy
+- this keeps panel migration isolated from adjacent services
+
+If you need `I.R.I.S.` after the panel move:
 
 - 🤖 [iris-remnawave](https://github.com/usanov18/iris-remnawave)
 
-### 🎯 Who This Is For
+### 📚 What This Toolkit Is Based On
 
-This repository is designed so even a less experienced operator can follow it.
-
-You do not need to remember:
-
-- which folders are actually critical for the panel
-- which services should start first
-- where the archive should live
-- which domains and env values must be checked after restore
-
-The scripts and docs handle that structure for you.
-
-### 📚 What It Is Based On
-
-The toolkit follows the official `Remnawave` model:
+The toolkit follows official `Remnawave` documentation:
 
 - [Quick start](https://docs.rw/docs/learn/quick-start)
 - [Environment variables](https://docs.rw/docs/install/environment-variables/)
@@ -292,14 +327,14 @@ The toolkit follows the official `Remnawave` model:
 
 ### 🧰 What Lives in This Repository
 
-- [`scripts/build-remnawave-migration-pack.sh`](scripts/build-remnawave-migration-pack.sh) — build an archive from the old host
-- [`scripts/restore-remnawave-migration-pack.sh`](scripts/restore-remnawave-migration-pack.sh) — restore that archive on a new host
-- [`scripts/bootstrap-remnawave-host.sh`](scripts/bootstrap-remnawave-host.sh) — bootstrap a clean Remnawave host
-- [`docs/remnawave-panel-migration.md`](docs/remnawave-panel-migration.md) — detailed guide
+- [`scripts/build-remnawave-migration-pack.sh`](scripts/build-remnawave-migration-pack.sh) — build a migration archive on the old host
+- [`scripts/restore-remnawave-migration-pack.sh`](scripts/restore-remnawave-migration-pack.sh) — restore that archive on the new host
+- [`scripts/bootstrap-remnawave-host.sh`](scripts/bootstrap-remnawave-host.sh) — bootstrap a clean `Remnawave` host
+- [`docs/remnawave-panel-migration.md`](docs/remnawave-panel-migration.md) — detailed operator guide
 
-### 📍 Fixed Workspace
+### 📍 Where Artifacts Live
 
-All build/restore artifacts live here:
+The toolkit uses a simple fixed workspace:
 
 ```text
 /home/
@@ -307,32 +342,32 @@ All build/restore artifacts live here:
 
 That means:
 
-- the archive is written into `/home/`
-- the checksum file is stored next to it
+- the migration archive is created in `/home/`
+- the checksum file is created next to it
 - restore staging lives in `/home/remnawave-migration-restore/`
 - pre-restore snapshots live in `/home/pre-restore-snapshot_<timestamp>/`
 
-### 🧭 Base Port Layout
+### 🔌 Recommended Port Layout
 
-If the panel and a local node share the same host, this is a practical layout:
+If the panel and the local node share one host, this layout is the practical one:
 
 - `443` — `Remnawave` panel
-- `8443` — keep reserved for `MTProto` if it is a neighboring service on the same host
-- `2222` — node API / control port
-- `2053` — preferred external port for local node client configs
+- `8443` — best reserved for `MTProto` if it exists on the same host
+- `2222` — node service/API port
+- `2053` — preferred public port for local node client configs
 
 Why `2053`:
 
-- `443` is already needed by the panel
-- `8443` is best kept for `MTProto`
-- `2222` is needed by the node itself
-- `2053` is usually the cleanest remaining public port for client-facing node configs
+- `443` is already used by the panel
+- `8443` is best left for `MTProto`
+- `2222` is required by the node itself
+- `2053` usually remains the cleanest public port for client-facing node configs
 
-### 🚀 Easiest Beginner Path
+## 🚀 Beginner-Friendly Start
 
-#### Option A. Move the current panel as-is
+### Scenario 1. Move the current panel to a new server
 
-#### 1. On the old server
+#### Step 1. Build the archive on the old host
 
 ```bash
 git clone https://github.com/usanov18/migration_Remnawave.git
@@ -345,14 +380,16 @@ After that, `/home/` will contain:
 - `remnawave_migration_pack_<host>_<timestamp>.tar.gz`
 - `remnawave_migration_pack_<host>_<timestamp>.tar.gz.sha256`
 
-#### 2. Copy the archive to the new server
+#### Step 2. Copy the archive to the new host
+
+Example:
 
 ```bash
 scp /home/remnawave_migration_pack_*.tar.gz root@NEW_SERVER_IP:/home/
 scp /home/remnawave_migration_pack_*.tar.gz.sha256 root@NEW_SERVER_IP:/home/
 ```
 
-#### 3. On the new server
+#### Step 3. Restore the archive on the new host
 
 ```bash
 git clone https://github.com/usanov18/migration_Remnawave.git
@@ -363,27 +400,36 @@ sudo bash scripts/restore-remnawave-migration-pack.sh
 The script will:
 
 - find the newest archive in `/home/`
-- extract it
-- restore files into `/opt/...`
-- import the `Remnawave` database
-- start services in the correct order
+- extract it into staging
+- restore panel files into `/opt/...`
+- start database and Redis
+- import the SQL dump
+- start the `Remnawave` backend
+- start the `subscription page`
+- start the reverse proxy
+- start the local `Remnawave Node` if it belonged to the old host
 
-#### 4. If IP or domains change
+#### Step 4. If the new host uses different domains
 
 ```bash
 sudo bash scripts/restore-remnawave-migration-pack.sh \
-  --public-host 203.0.113.10 \
   --admin-domain admin.example.com \
   --subscription-domain sub.example.com
 ```
 
-#### 5. If you want a dry run first
+#### Step 5. If you want file-only restore first
 
 ```bash
 sudo bash scripts/restore-remnawave-migration-pack.sh --skip-start
 ```
 
-### 🏗️ Option B. Bootstrap a clean Remnawave host
+This is useful when you want to:
+
+- inspect the extracted files first
+- edit `.env` manually
+- review proxy or node configs before starting containers
+
+### Scenario 2. Bootstrap a clean panel from scratch
 
 If you do not need the old state:
 
@@ -404,73 +450,81 @@ sudo bash scripts/bootstrap-remnawave-host.sh \
   --subscription-api-token YOUR_REMNAWAVE_API_TOKEN
 ```
 
-### 🧠 What Each Script Does
+What bootstrap does:
 
-#### `build-remnawave-migration-pack.sh`
+- installs Docker when needed
+- downloads the current `Remnawave`
+- prepares `.env`
+- prepares the bundled `subscription page`
+- prepares `Caddy`
+- starts the base panel stack
 
-Builds an archive into `/home/`.
+## 🧠 What Each Script Does
 
-The archive contains:
+### `build-remnawave-migration-pack.sh`
+
+Builds a migration archive that contains only panel-side components:
 
 - `Remnawave`
 - `subscription page`
-- reverse proxy (`nginx` / `Caddy`)
+- reverse proxy
 - local `Remnawave Node`
-- `I.R.I.S.`, if it is part of the same host
 - SQL dump
-- manifest and restore notes
+- manifest
+- restore notes
 
-#### `restore-remnawave-migration-pack.sh`
+### `restore-remnawave-migration-pack.sh`
 
-Takes the archive from `/home/` and restores the stack.
+Restores the panel-side stack in the correct order:
 
-Startup order:
-
-1. database and Redis
+1. `remnawave-db` and `remnawave-redis`
 2. SQL import
 3. `Remnawave` backend
 4. `subscription page`
 5. reverse proxy
-6. local node
-7. `I.R.I.S.`, if it was part of the archive
+6. local `Remnawave Node`
 
-#### `bootstrap-remnawave-host.sh`
+### `bootstrap-remnawave-host.sh`
 
-Clean fresh-install path:
+Prepares a clean base for a new server:
 
-- installs Docker if needed
-- downloads the official backend compose
-- downloads the official bundled subscription page compose
-- generates `.env`
-- starts the base stack
+- Docker
+- `Remnawave`
+- `subscription page`
+- `Caddy`
 
-### ✅ What to Check After Restore
+## ✅ What To Check After Restore
 
-- the panel opens
-- the subscription page opens
-- the `Remnawave API` responds
-- the local node is alive if it belonged to the old host
-- `I.R.I.S.` responds again if it was part of the old host
+Check in this exact order:
 
-### 📌 What to Remember About Neighbor Services
+1. The panel opens in a browser.
+2. The subscription page opens.
+3. The `Remnawave API` responds.
+4. If the old host had a local node, it is up as well.
+5. The node service/API responds on `2222`.
+6. Client-facing node configs use `2053` if that is your production layout.
 
-`MTProto` and `user bot` are out of scope for this toolkit.
+## 📌 What To Do After The Panel Is Healthy
 
-But if they live on the same server, still check manually:
+Once the panel, subscription page, and local node are confirmed healthy:
 
-- that `8443` stays reserved and clean for `MTProto`
-- that `MTProto` does not conflict with panel and node ports
-- that the user bot still points to the correct panel/subscription/mtproxy endpoints
+- deploy `I.R.I.S.` separately from [iris-remnawave](https://github.com/usanov18/iris-remnawave) if needed
+- verify `MTProto` separately
+- verify `user bot` separately
 
-### 🔐 Important
+This separation is intentional.  
+Panel and node first. Adjacent services after that.
 
-- the archive contains secrets, tokens, and private keys
-- treat it as a sensitive secret
-- keep the checksum file next to the archive
+## 🔐 Important
+
+- the archive contains tokens, keys, and sensitive configs
+- treat it as a secret
+- keep the checksum file next to it
 - do not leave restore staging longer than needed
+- remove the pre-restore snapshot only after the migration is fully verified
 
-### 📖 Next
+## 📖 More Details
 
-If you want a more detailed operator guide:
+Full step-by-step operator guide:
 
 - [`docs/remnawave-panel-migration.md`](docs/remnawave-panel-migration.md)

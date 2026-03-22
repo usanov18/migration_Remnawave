@@ -1,27 +1,28 @@
 # Remnawave Panel Migration Guide
 
-This guide is focused on one thing:
+This guide is intentionally centered around:
 
-- moving and restoring the `Remnawave` panel stack
-
-It is intentionally centered on:
-
-- `Remnawave`
+- `Remnawave Panel`
+- `PostgreSQL / Redis`
 - `subscription page`
 - reverse proxy
 - local `Remnawave Node`
-- optional `I.R.I.S.` admin-layer
 
-It is **not** a migration project for:
+It does **not** migrate:
 
+- `I.R.I.S.`
 - `MTProto`
 - `user bot`
 
-Those services may exist on the same host, but they are treated here only as neighboring services that affect your port layout.
+Those are treated as adjacent services and should be deployed or verified separately after the panel stack is healthy.
+
+If you use `I.R.I.S.`, deploy it later from:
+
+- [iris-remnawave](https://github.com/usanov18/iris-remnawave)
 
 ## 1. Fixed Workspace
 
-All generated artifacts live under:
+All generated migration artifacts live under:
 
 ```text
 /home/
@@ -34,23 +35,23 @@ That means:
 - restore staging lives in `/home/remnawave-migration-restore/`
 - pre-restore snapshots live in `/home/pre-restore-snapshot_<timestamp>/`
 
-## 2. Practical Port Layout
+## 2. Recommended Port Layout
 
-If panel services and a local node share one host, the most practical layout is:
+If the panel and the local node share one host, this is the practical layout:
 
 - `443` — `Remnawave` panel
-- `8443` — reserved for `MTProto` if it exists next to the panel
+- `8443` — reserve for `MTProto` if it exists next to the panel
 - `2222` — node API / control port
 - `2053` — preferred public port for local node client configs
 
-Why `2053` is recommended for local node configs:
+Why `2053` is recommended:
 
 - `443` is already occupied by the panel
-- `8443` is better kept for `MTProto`
+- `8443` is better left for `MTProto`
 - `2222` is needed by the node itself
-- `2053` usually remains the cleanest public port for client-facing node traffic
+- `2053` is usually the cleanest remaining public port for client-facing node traffic
 
-## 3. The Three Main Scripts
+## 3. Main Scripts
 
 ### Build a Migration Archive
 
@@ -60,9 +61,9 @@ sudo bash scripts/build-remnawave-migration-pack.sh
 
 What it does:
 
-- scans the current host for the panel-side stack
-- collects config files and related services
-- dumps the `Remnawave` database
+- scans the current host for panel-side services
+- collects the panel config and related files
+- exports a `Remnawave` SQL dump
 - writes a manifest and restore notes
 - saves one archive and one checksum file into `/home/`
 
@@ -77,13 +78,12 @@ Default behavior:
 - finds the newest `remnawave_migration_pack_*.tar.gz` in `/home/`
 - extracts it under `/home/remnawave-migration-restore/`
 - restores files into `/opt/...`
-- starts the stack in the correct order
+- starts the panel stack in the correct order
 
 Useful overrides:
 
 ```bash
 sudo bash scripts/restore-remnawave-migration-pack.sh \
-  --public-host 203.0.113.10 \
   --admin-domain admin.example.com \
   --subscription-domain sub.example.com
 ```
@@ -94,6 +94,12 @@ File-only mode:
 sudo bash scripts/restore-remnawave-migration-pack.sh --skip-start
 ```
 
+Use file-only mode if you want to:
+
+- review files before launching containers
+- edit `.env` manually
+- verify proxy and node configs first
+
 ### Bootstrap a Clean Host
 
 ```bash
@@ -102,11 +108,12 @@ sudo bash scripts/bootstrap-remnawave-host.sh \
   --subscription-domain sub.example.com
 ```
 
-This path is for a fresh server when you do not need the old runtime state.
+This is **not** migration.  
+It is the clean-host path for a new `Remnawave` installation when you do not need the old runtime state.
 
 ## 4. What the Archive Collects
 
-The archive is focused on the panel stack and may include:
+The archive is focused only on the panel stack and may include:
 
 - `/opt/remnawave/.env`
 - `/opt/remnawave/docker-compose.yml`
@@ -114,24 +121,12 @@ The archive is focused on the panel stack and may include:
 - `/opt/remnawave/nginx/*`
 - `/opt/remnawave/caddy/*`
 - `/opt/remnawave/subscription/*`
-- `/opt/iris-remnawave/.env`
-- `/opt/iris-remnawave/docker-compose.yml`
-- `/opt/iris-remnawave/state/bot_users.db`
-- `/opt/iris-remnawave/state/traffic_cache.json`
 - `/opt/remnanode/*`
 - `/opt/rnexus-site/*`
 - `inventory/manifest.json`
 - `inventory/docker_ps.txt`
 - `inventory/services.txt`
 - `inventory/restore_notes.txt`
-
-The manifest stores:
-
-- public host
-- panel domain
-- subscription domain
-- `I.R.I.S.` git remote
-- `I.R.I.S.` git commit
 
 ## 5. Beginner-Safe Real Migration Flow
 
@@ -143,7 +138,7 @@ cd migration_Remnawave
 sudo bash scripts/build-remnawave-migration-pack.sh
 ```
 
-After that, check `/home/`.
+After that, look inside `/home/`.
 
 You should see:
 
@@ -179,27 +174,29 @@ cd migration_Remnawave
 sudo bash scripts/restore-remnawave-migration-pack.sh
 ```
 
-### Step 5. If the New Host Has a New IP or New Domains
-
-Use restore with overrides:
+### Step 5. If the New Host Uses New Domains
 
 ```bash
 sudo bash scripts/restore-remnawave-migration-pack.sh \
-  --public-host 203.0.113.10 \
   --admin-domain admin.example.com \
   --subscription-domain sub.example.com
 ```
 
-## 6. What Restore Changes for You
+### Step 6. If You Want to Inspect Before Start
 
-If you pass overrides, the restore script can automatically update:
+```bash
+sudo bash scripts/restore-remnawave-migration-pack.sh --skip-start
+```
 
-### `I.R.I.S.`
+This mode is useful when you want to:
 
-- `/opt/iris-remnawave/.env`
-  - `PUBLIC_HOST`
-  - `REMNAWAVE_URL`
-  - `REMNAWAVE_SUB_URL`
+- verify restored files in `/opt/`
+- edit `.env`
+- compare old and new domains before startup
+
+## 6. What Restore Changes For You
+
+If you pass overrides, the restore script can update:
 
 ### `Remnawave`
 
@@ -222,13 +219,12 @@ The restore script starts the stack in this order:
 4. bundled `subscription page`
 5. reverse proxy (`Caddy` first, otherwise `nginx`)
 6. local `Remnawave Node`
-7. `I.R.I.S.` and local `ops-agent`
 
-This order is one of the main reasons to use the script instead of restoring everything manually.
+This startup order is one of the main reasons to use the script instead of doing everything by hand.
 
 ## 8. Clean Bootstrap Path
 
-If you only want a fresh official-style base:
+If you want a fresh official-style panel base:
 
 ```bash
 git clone https://github.com/usanov18/migration_Remnawave.git
@@ -271,23 +267,19 @@ After restore, check in this order:
 
 ### Local Node
 
-- the local node is alive, if it belonged to the old host
+- the local node is alive if it belonged to the old host
 - its control/API port `2222` answers correctly
-- client-facing configs use `2053` if that is your chosen production layout
+- client-facing configs use `2053` if that is your production layout
 
-### Admin Layer
+## 10. What to Do After the Panel Is Healthy
 
-- `I.R.I.S.` responds in Telegram, if it was part of the old host
+After the panel stack is stable, handle adjacent services separately:
 
-## 10. Important Neighbor Notes
+- deploy `I.R.I.S.` from [iris-remnawave](https://github.com/usanov18/iris-remnawave) only after the panel is healthy
+- verify `MTProto` manually and keep `8443` free for it if that is your layout
+- verify `user bot` manually
 
-`MTProto` and `user bot` are intentionally outside this migration toolkit.
-
-Still, if they live on the same machine, do not forget:
-
-- keep `8443` clean for `MTProto`
-- do not let `MTProto` conflict with `443` and `2222`
-- re-check user-bot endpoints manually after the move
+This separation is intentional and keeps the migration path clean.
 
 ## 11. Safety Notes
 
@@ -301,7 +293,7 @@ Still, if they live on the same machine, do not forget:
 
 Choose `build + restore` if:
 
-- you want the new server to be as close as possible to the old one
+- you want the new server to be as close as possible to the old panel host
 - you need the current production database
 - you want the current panel stack and local node
 
