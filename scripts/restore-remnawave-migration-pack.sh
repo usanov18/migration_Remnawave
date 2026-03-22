@@ -315,8 +315,9 @@ Next checks:
 3. Confirm Remnawave API answers.
 4. Confirm the local node works on port 2222 if this host carries one.
 5. Confirm client-facing node configs use 2053 if that is your production layout.
-6. If you use I.R.I.S., redeploy it separately from the iris-remnawave repo only after the panel restore is complete.
-7. Do not pull MTProto or user bot into this restore flow; verify or redeploy them separately.
+6. If you use I.R.I.S., redeploy it separately from https://github.com/usanov18/iris-remnawave only after the panel restore is complete.
+7. If you use user bot, redeploy it separately from https://github.com/usanov18/iris-remnawave_user_bot only after the panel restore is complete.
+8. Do not pull MTProto into this restore flow; verify or redeploy it separately.
 
 Artifacts created during restore:
 - restore staging: ${WORK_DIR}

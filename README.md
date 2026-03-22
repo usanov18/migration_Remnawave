@@ -54,6 +54,10 @@
 
 - 🤖 [iris-remnawave](https://github.com/usanov18/iris-remnawave)
 
+Если вам нужен `user bot` после переезда панели:
+
+- 💬 [iris-remnawave_user_bot](https://github.com/usanov18/iris-remnawave_user_bot)
+
 ### 📚 На что опирается toolkit
 
 Toolkit собран вокруг официальной документации `Remnawave`:
@@ -247,8 +251,8 @@ sudo bash scripts/bootstrap-remnawave-host.sh \
 Когда панель, subscription page и локальная нода уже подтвержденно работают:
 
 - при необходимости отдельно раскатить `I.R.I.S.` из [iris-remnawave](https://github.com/usanov18/iris-remnawave)
+- при необходимости отдельно раскатить `user bot` из [iris-remnawave_user_bot](https://github.com/usanov18/iris-remnawave_user_bot)
 - отдельно проверить `MTProto`
-- отдельно проверить `user bot`
 
 Это намеренное разделение.  
 Сначала панель и нода. Потом соседние сервисы.
@@ -315,6 +319,10 @@ Why:
 If you need `I.R.I.S.` after the panel move:
 
 - 🤖 [iris-remnawave](https://github.com/usanov18/iris-remnawave)
+
+If you need `user bot` after the panel move:
+
+- 💬 [iris-remnawave_user_bot](https://github.com/usanov18/iris-remnawave_user_bot)
 
 ### 📚 What This Toolkit Is Based On
 
@@ -509,8 +517,8 @@ Check in this exact order:
 Once the panel, subscription page, and local node are confirmed healthy:
 
 - deploy `I.R.I.S.` separately from [iris-remnawave](https://github.com/usanov18/iris-remnawave) if needed
+- deploy `user bot` separately from [iris-remnawave_user_bot](https://github.com/usanov18/iris-remnawave_user_bot) if needed
 - verify `MTProto` separately
-- verify `user bot` separately
 
 This separation is intentional.  
 Panel and node first. Adjacent services after that.

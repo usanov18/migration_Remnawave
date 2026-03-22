@@ -20,6 +20,10 @@ If you use `I.R.I.S.`, deploy it later from:
 
 - [iris-remnawave](https://github.com/usanov18/iris-remnawave)
 
+If you use `user bot`, deploy it later from:
+
+- [iris-remnawave_user_bot](https://github.com/usanov18/iris-remnawave_user_bot)
+
 ## 1. Fixed Workspace
 
 All generated migration artifacts live under:
@@ -276,8 +280,8 @@ After restore, check in this order:
 After the panel stack is stable, handle adjacent services separately:
 
 - deploy `I.R.I.S.` from [iris-remnawave](https://github.com/usanov18/iris-remnawave) only after the panel is healthy
+- deploy `user bot` from [iris-remnawave_user_bot](https://github.com/usanov18/iris-remnawave_user_bot) only after the panel is healthy
 - verify `MTProto` manually and keep `8443` free for it if that is your layout
-- verify `user bot` manually
 
 This separation is intentional and keeps the migration path clean.
 
